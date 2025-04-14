@@ -2,7 +2,7 @@ import simpy
 import numpy as np
 import random
 
-# Parámetros del modelo (posteriormente ajustar estos valores)
+# Parámetros del modelo 
 A0 = 1000       # Capital inicial
 c = 10          # Prima por asegurado (por día)
 nu = 5          # Tasa de llegada de nuevos asegurados (por día)
@@ -17,20 +17,6 @@ n_insured = 0
 last_event_time = 0  # para actualizar ingresos acumulados
 
 
-#Variables Globales:
-#    capital: Representa el capital de la compañía.
-#    n_insured: Número de asegurados activos.
-#    last_event_time: Para actualizar de forma exacta el ingreso por primas (se actualizará la prima acumulada en función del tiempo transcurrido y el número de asegurados).
-
-#Eventos a simular:
-#    Llegada de nuevos asegurados:
-#        Ocurre de acuerdo a un proceso Poisson con tasa νν.
-#    Salida de un asegurado:
-#        Cada asegurado "vive" un tiempo exponencialmente distribuido con parámetro μμ.
-#    Reclamación de un asegurado:
-#        Mientras está activo, cada asegurado genera reclamaciones con tiempos inter-arrivo exponenciales (tasa λλ). 
-#        Cada reclamación reduce el capital de la compañía, restando el monto obtenido aleatoriamente de FF
-
 def update_capital(env):
     global capital, n_insured, last_event_time, c
     dt = env.now - last_event_time
@@ -40,7 +26,6 @@ def update_capital(env):
 def new_insured_arrivals(env):
     global n_insured
     while env.now < T:
-        # Espera hasta la siguiente llegada
         yield env.timeout(random.expovariate(nu))
         update_capital(env)
         env.process(insured_process(env))
@@ -50,7 +35,6 @@ def insured_process(env):
     # Registro de llegada del asegurado:
     update_capital(env)
     n_insured += 1
-    # Programa la salida (duración de la estancia) con tiempo exponencial con parámetro mu
     lifetime = random.expovariate(mu)
     # Inicia un proceso interno para generar reclamaciones
     claim_process = env.process(generate_claims(env, lifetime))
@@ -76,10 +60,31 @@ def generate_claims(env, lifetime):
     except simpy.Interrupt:
         # El proceso se interrumpe cuando el asegurado sale
         return
+    
+# Para hacer el analisis de sensibilidad
+def simular(A0_param, c_param, nu_param, mu_param, lam_param, mean_claim_param ,T_param):
+    global capital, n_insured, last_event_time, c, nu, mu, lam, mean_claim, T
+    # Reinicializar variables globales al comienzo de la simulación:
+    capital = A0_param
+    n_insured = 0
+    last_event_time = 0
+    c = c_param
+    nu = nu_param
+    mu = mu_param
+    lam = lam_param
+    mean_claim = mean_claim_param
+    T = T_param
+    
+    env = simpy.Environment()
+    env.process(new_insured_arrivals(env))
+    env.run(until=T)
+    update_capital(env)
+    
+    return capital 
+
 
 def run_simulation():
     global capital, last_event_time
-    # Inicializamos la última actualización en el tiempo 0
     last_event_time = 0
     env = simpy.Environment()
     env.process(new_insured_arrivals(env))
